@@ -1,6 +1,7 @@
 """FastAPI 应用入口：注册路由、CORS、启动时初始化数据库。"""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,6 +11,11 @@ from .config import settings
 from .database import SessionLocal
 from .routers import blacklists, cases, dashboard, risk
 from .seed import create_tables, seed_all
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
 
 
 @asynccontextmanager

@@ -26,16 +26,39 @@ def _safe_div(a: float, b: float) -> float:
 
 
 def _blacklist_hits(db: Session, candidates: List[Optional[str]]) -> set:
-    """返回同时命中、且 status=1 的黑名单值集合。"""
-    values = [c for c in candidates if c]
-    if not values:
+    """返回命中、且 status=1 的黑名单值（小写规范化，避免大小写/空格漏判）。"""
+    norm_candidates = {str(c).strip().lower() for c in candidates if c}
+    if not norm_candidates:
         return set()
-    rows = (
-        db.query(Blacklist.blacklist_value)
-        .filter(Blacklist.status == 1, Blacklist.blacklist_value.in_(values))
-        .all()
+    rows = db.query(Blacklist.blacklist_value).filter(Blacklist.status == 1).all()
+    all_values = {str(r[0]).strip().lower() for r in rows}
+    return norm_candidates & all_values
+
+
+def _build_virtual_order(user_id: str, payload: Dict[str, Any], now) -> Dict[str, Any]:
+    """当未传 order_id 时，用 payload 中的金额等字段构造一个虚拟订单，
+    保证订单维度特征始终拿到本次请求携带的信息（F1 修复）。"""
+    return {
+        "order_id": payload.get("order_id"),
+        "user_id": user_id,
+        "amount": float(payload.get("amount", 0) or 0),
+        "item_count": int(payload.get("item_count", 1) or 1),
+        "discount_ratio": float(payload.get("discount_ratio", 0) or 0),
+        "created_at": now,
+        "recipient": payload.get("recipient"),
+        "sensitive_goods": int(payload.get("sensitive_goods", 0) or 0),
+        "has_coupon": int(payload.get("has_coupon", 0) or 0),
+        "pay_timeout_ms": int(payload.get("pay_timeout_ms", 30 * 60 * 1000)),
+        "address": payload.get("address", ""),
+        "address_risk_region": int(payload.get("address_risk_region", 0) or 0),
+    }
+
+
+def _has_order_info(payload: Dict[str, Any]) -> bool:
+    return any(
+        payload.get(k) is not None
+        for k in ("amount", "item_count", "sensitive_goods", "discount_ratio", "has_coupon", "pay_timeout_ms")
     )
-    return {r[0] for r in rows}
 
 
 def compute_features(
@@ -55,6 +78,9 @@ def compute_features(
 
     # 当前事件关联订单（不存在则按入参补建，保证订单维度可算）
     order = biz.ensure_order(order_id, user_id, payload) if order_id else None
+    # F1：无 order_id 但 payload 携带订单信息时，构造虚拟订单，避免金额输入被忽略
+    if order is None and _has_order_info(payload):
+        order = _build_virtual_order(user_id, payload, _NOW)
 
     now = _NOW
     within = lambda d, days: (d is not None) and (now - d).days <= days
@@ -114,7 +140,14 @@ def compute_features(
         "user_new_flag": 1 if user.get("reg_days", 999) < 7 else 0,
         "user_device_count": user.get("device_count", 1),
         "user_mobile_changed_7d": user.get("mobile_changed_7d", 0),
-        "user_blacklist_hit": 1 if (user_values[0] in hits or user.get("phone") in hits) else 0,
+        "user_blacklist_hit": (
+            1
+            if (
+                str(user_values[0]).strip().lower() in hits
+                or (user.get("phone") and str(user.get("phone")).strip().lower() in hits)
+            )
+            else 0
+        ),
         "user_order_count_30d": order_counts_30d,
         "user_order_count_total": len(orders),
         "user_order_freq_7d": order_counts_7d,
@@ -137,9 +170,13 @@ def compute_features(
         "order_pay_timeout": 1 if pay_timeout_ms > 30 * 60 * 1000 else 0,
         "order_amount_vs_avg": _safe_div((src_order or {}).get("amount", 0), avg_amount),
         "order_high_value": 1 if (src_order or {}).get("amount", 0) >= 5000 else 0,
-        "order_blacklist_hit": 1 if order_id in hits else 0,
+        "order_blacklist_hit": 1 if (order_id and str(order_id).strip().lower() in hits) else 0,
         # --- 地址维度 ---
-        "address_blacklist_hit": 1 if (addr or {}).get("address") in hits else 0,
+        "address_blacklist_hit": (
+            1
+            if (addr and str(addr.get("address")).strip().lower() in hits)
+            else 0
+        ),
         "address_region_risk": (addr or {}).get("risk_region", 0),
         "address_used_count": (addr or {}).get("used_count", 0),
         "address_distance_km": float(payload.get("address_distance_km", 0) or 0),

@@ -1,6 +1,7 @@
 """风险案件审核接口。"""
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,7 @@ from ..schemas import CaseDetailOut, CaseOut, CaseReviewIn, ReviewLogOut
 from ..services.assessment_engine import get_assessment_detail
 
 router = APIRouter()
+logger = logging.getLogger("risk.cases")
 
 
 @router.get("/cases")
@@ -73,6 +75,7 @@ def review_case(body: CaseReviewIn, db: Session = Depends(get_db)):
     db.add(log)
     db.commit()
     db.refresh(case)
+    logger.info("案件审核 case_id=%s result=%s operator=%s", case.id, body.review_result, case.reviewer_id)
     return {
         "case": CaseOut.model_validate(case),
         "message": "审核完成",

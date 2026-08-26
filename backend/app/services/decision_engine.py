@@ -6,10 +6,15 @@
 - 处理建议 pass / manual_review / reject
 - level==high 或 decision∈{manual_review, reject} 时自动创建案件
 
-规则分类约定（seed 中 rule_code 前缀）：
-- REJxxx / score>=60  → 倾向于 reject
-- MANxxx / score>=30  → 倾向于 manual_review
-- 其余（得分型）按等级兜底
+规则意图由 rule_code 前缀表达（区别于得分型 SCR 规则）：
+- REJxxx  → 拒绝（如命中黑名单）
+- MANxxx  → 人工复核（如退款多、高危地址、异常大额）
+- SCRxxx  → 纯得分，仅贡献评分，不直接决定建议
+
+决策优先级（F3 有意设计，详见 decide）：
+- 命中 REJ → 拒绝；命中 MAN → 人工复核；否则按等级兜底。
+- level==high 但只命中 MAN 规则时，仍为 manual_review（人工把关而非自动拒绝，
+  避免仅凭累计过错失地自动拒绝；只有 REJ 类规则才自动拒绝）。
 """
 from __future__ import annotations
 
@@ -19,20 +24,29 @@ from ..config import settings
 
 
 def _category(rule_code: str, score: float) -> str:
+    """按规则编码前缀提取意图；得分型 SCR 规则返回空串（仅贡献评分）。"""
     code = (rule_code or "").upper()
     if code.startswith(("REJ", "REJECT")):
         return "reject"
     if code.startswith(("MAN", "MANUAL")):
         return "manual_review"
-    if score >= 60:
-        return "reject"
-    if score >= 30:
-        return "manual_review"
     return ""
 
 
 def decide(hits: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """输入规则命中列表，返回 {risk_score, risk_level, decision, auto_create_case}。"""
+    """输入规则命中列表，返回 {risk_score, risk_level, decision, auto_create_case}。
+
+    评分：命中分值累加，clamp 到 [0, 100]。
+    等级：score<low_threshold→low，<high_threshold→medium，否则 high。
+    建议（决策表）：
+      1) 命中 REJ 类规则 → reject
+      2) 命中 MAN 类规则 → manual_review
+      3) 否则按等级兜底：high→reject、medium→manual_review、low→pass
+
+    说明（F3）：当等级为 high 但仅命中 MAN 类规则（无 REJ）时，结果取 manual_review
+    而非 reject —— 这是有意设计：只靠累计得分自动拒绝容易误伤，把「高风险但仍需
+    人工判断」的场景交给人工把关；自动拒绝仅由明确的 REJ 类规则（如命中黑名单）触发。
+    """
     risk_score = round(sum(h["hit_score"] for h in hits), 2)
     risk_score = max(0.0, min(100.0, risk_score))
 

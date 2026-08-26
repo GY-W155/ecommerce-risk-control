@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -21,6 +22,8 @@ from ..models import (
 from ..schemas import RiskCheckRequest
 from . import business_data as biz
 from . import decision_engine, feature_engine, rule_engine
+
+logger = logging.getLogger("risk.assessment")
 
 
 def _payload_of(req: RiskCheckRequest) -> Dict[str, Any]:
@@ -43,6 +46,7 @@ def run_check(db: Session, req: RiskCheckRequest) -> Dict[str, Any]:
     )
     db.add(event)
     db.flush()  # 得到 event.id
+    logger.info("接受事件 type=%s user=%s order=%s source=%s", req.event_type, req.user_id, req.order_id, req.source_id)
 
     # 2. 计算特征（复用函数，保证对未知用户也能算）
     features = feature_engine.compute_features(
@@ -51,6 +55,7 @@ def run_check(db: Session, req: RiskCheckRequest) -> Dict[str, Any]:
 
     # 3. 规则匹配
     hits = rule_engine.match_rules(db, features)
+    logger.info("规则匹配 事件id=%s 命中=%s 条", event.id, len(hits))
 
     # 4. 评分、分级、建议
     decision = decision_engine.decide(hits)
@@ -103,8 +108,10 @@ def run_check(db: Session, req: RiskCheckRequest) -> Dict[str, Any]:
                 ),
             )
         )
+        logger.info("自动建案 case_id=%s assessment_id=%s level=%s decision=%s", case.id, assessment.id, decision["risk_level"], decision["decision"])
 
     db.commit()
+    logger.info("评估完成 assessment_id=%s score=%s level=%s decision=%s", assessment.id, decision["risk_score"], decision["risk_level"], decision["decision"])
 
     return {
         "event_id": event.id,

@@ -38,6 +38,13 @@ Base URL：后端 `http://<host>:8000`，所有接口前缀 `/api`。
 
 > `case_id` 非空表示该结果已自动创建案件（等级 high 或建议 manual_review / reject）。
 
+**处理建议决策表**（规则意图由 `rule_code` 前缀表达：`REJ*`→拒绝、`MAN*`→人工、`SCR*`→仅贡献评分）：
+1. 命中 `REJ*` 规则 → `reject`
+2. 命中 `MAN*` 规则 → `manual_review`
+3. 否则按等级兜底：`high`→`reject`、`medium`→`manual_review`、`low`→`pass`
+
+> 说明：当等级为 `high` 但仅命中 `MAN*` 规则（无 `REJ*`）时，建议仍是 `manual_review` —— 这是有意设计：只凭累计得分自动拒绝容易误伤，「高风险但仍需人工判断」的场景交由人工把关；自动拒绝仅由明确的 `REJ*` 规则（如命中黑名单）触发。
+
 ### GET /api/risk/assessments/{assessment_id}
 **响应**：`risk_score`、`risk_level`、`decision`、`feature_snapshot`、`rule_hits`，并附带事件与用户信息。
 

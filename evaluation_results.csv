@@ -1,0 +1,20 @@
+﻿name,method,path,input,expect,actual,ok
+健康检查,GET,/api/health,-,200,HTTP 200,PASS
+四类事件-order_create,POST,/api/risk/check,"{""event_type"": ""order_create"", ""source_id"": ""verify"", ""user_id"": ""V-NOR"", ""event_payload"": {""amount"": 259, ""address_distance_km"": 0}}",200+结构完整,HTTP 200 score=0.0 level=low decision=pass,PASS
+四类事件-order_pay,POST,/api/risk/check,"{""event_type"": ""order_pay"", ""source_id"": ""verify"", ""user_id"": ""V-NOR"", ""event_payload"": {""amount"": 259, ""address_distance_km"": 0}}",200+结构完整,HTTP 200 score=0.0 level=low decision=pass,PASS
+四类事件-after_sale_apply,POST,/api/risk/check,"{""event_type"": ""after_sale_apply"", ""source_id"": ""verify"", ""user_id"": ""V-NOR"", ""event_payload"": {""amount"": 259, ""address_distance_km"": 0}}",200+结构完整,HTTP 200 score=0.0 level=low decision=pass,PASS
+四类事件-logistics_complaint,POST,/api/risk/check,"{""event_type"": ""logistics_complaint"", ""source_id"": ""verify"", ""user_id"": ""V-NOR"", ""event_payload"": {""amount"": 259, ""address_distance_km"": 0}}",200+结构完整,HTTP 200 score=0.0 level=low decision=pass,PASS
+高风险自动建案,POST,/api/risk/check,"{""event_type"": ""order_create"", ""source_id"": ""verify"", ""user_id"": ""U2002"", ""order_id"": ""U2002-O2001"", ""event_payload"": {""amount"": 12800, ""address_distance_km"": 0}}",level=high 且 case_id 非空,HTTP 200 score=100.0 level=high case=26,PASS
+黑名单命中拒绝,POST,/api/risk/check,"{""event_type"": ""order_create"", ""source_id"": ""verify"", ""user_id"": ""U3003"", ""order_id"": ""U3003-O3001"", ""event_payload"": {""amount"": 6600}}",decision=reject 且 user_blacklist_hit=1,HTTP 200 decision=reject user_bl=1,PASS
+规则-新增,POST,/api/risk/rules,"{""rule_code"": ""SCR_VERIFY""}",200 且返回 id,HTTP 200 id=35,PASS
+规则-停用,POST,/api/risk/rules/status,"{""id"": 35}",rule_status=0,HTTP 200 status=0,PASS
+规则-更新,POST,/api/risk/rules/update,"{""id"": 35}",score=20,HTTP 200 score=20.0,PASS
+规则-删除,POST,/api/risk/rules/delete,"{""id"": 35}",ok,HTTP 200,PASS
+黑名单-新增,POST,/api/risk/blacklists,"{""blacklist_value"": ""13900009999""}",200,HTTP 200 id=13,PASS
+黑名单-导入去重,POST,/api/risk/blacklists/import,"{""text"": ""U3003""}",skipped>=1,"HTTP 200 {'added': 0, 'skipped': 1}",PASS
+黑名单-删除,POST,/api/risk/blacklists/delete,"{""ids"": [13]}",ok,HTTP 200,PASS
+案件-分页列表,GET,/api/risk/cases,"{""size"": 5}",200+items,HTTP 200 total=27,PASS
+案件-详情含日志,GET,/api/risk/cases/27,-,含 review_logs,HTTP 200 logs=1,PASS
+案件-审核+日志,POST,/api/risk/cases/review,"{""case_id"": 27, ""review_result"": ""approved""}",status 变更且新增 review 日志,"HTTP 200 actions=['review', 'auto_create']",PASS
+用户画像,GET,/api/risk/users/{uid}/profile,-,五类指标齐全,"HTTP 200 {""order_count"": 1, ""refund_count"": 3, ""complaint_count"": 1, ""address_count"": 1, ""blacklist_hit"": 0}",PASS
+运营看板,GET,/api/risk/dashboard,-,cards/trend/rule_rank,HTTP 200 cards=5 trend=7,PASS

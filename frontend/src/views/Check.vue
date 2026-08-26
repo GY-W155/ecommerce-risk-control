@@ -98,7 +98,7 @@ const form = reactive({
   source_id: '演示-下单中心',
   user_id: 'U1001',
   order_id: '',
-  amount: 8000,
+  amount: 259,
   address_distance_km: 0,
 })
 const result = ref(null)
@@ -137,7 +137,7 @@ function reset() {
   form.event_type = 'order_create'
   form.user_id = 'U1001'
   form.order_id = ''
-  form.amount = 8000
+  form.amount = 259
   form.address_distance_km = 0
   result.value = null
 }
