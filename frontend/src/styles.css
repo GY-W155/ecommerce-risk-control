@@ -1,0 +1,20 @@
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  background: #f0f2f5;
+  color: #303133;
+}
+.page { padding: 16px; }
+.page-title { margin: 0 0 16px; font-size: 20px; font-weight: 600; }
+.card { margin-bottom: 16px; }
+.section-title {
+  font-size: 15px; font-weight: 600; margin: 0 0 12px;
+  padding-bottom: 8px; border-bottom: 1px solid #eee;
+}
+.flex { display: flex; gap: 12px; flex-wrap: wrap; }
+.kv {
+  display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px dashed #eee; font-size: 13px;
+}
+.kv span:first-child { color: #909399; }

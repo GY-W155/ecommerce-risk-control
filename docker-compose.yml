@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: risk-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root2024
+      MYSQL_DATABASE: risk_control
+      MYSQL_USER: risk
+      MYSQL_PASSWORD: risk2024
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      # 宿主机 3308 -> 容器内 3306（避开本地已占用的 3306 / 3307）
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-proot2024"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: risk-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: risk
+      MYSQL_PASSWORD: risk2024
+      MYSQL_DATABASE: risk_control
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: risk-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:
